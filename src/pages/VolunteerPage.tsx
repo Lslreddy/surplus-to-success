@@ -243,7 +243,10 @@ const VolunteerPage = () => {
                     <p className="text-muted-foreground mb-6">
                       You don't have any deliveries in progress.
                     </p>
-                    <Button variant="outline" onClick={() => document.querySelector('button[value="available"]')?.click()}>
+                    <Button variant="outline" onClick={() => {
+                      const availableTab = document.querySelector('button[value="available"]') as HTMLElement;
+                      if (availableTab) availableTab.click();
+                    }}>
                       Browse available deliveries
                     </Button>
                   </div>
@@ -296,7 +299,10 @@ const VolunteerPage = () => {
                     <p className="text-muted-foreground mb-6">
                       Once you complete deliveries, they'll appear here.
                     </p>
-                    <Button variant="outline" onClick={() => document.querySelector('button[value="available"]')?.click()}>
+                    <Button variant="outline" onClick={() => {
+                      const availableTab = document.querySelector('button[value="available"]') as HTMLElement;
+                      if (availableTab) availableTab.click();
+                    }}>
                       Start your first delivery
                     </Button>
                   </div>
