@@ -102,7 +102,7 @@ const RequestPage = () => {
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Categories</SelectItem>
+                <SelectItem value="all-categories">All Categories</SelectItem>
                 {foodCategories.map(category => (
                   <SelectItem key={category} value={category}>
                     {category}
@@ -116,7 +116,7 @@ const RequestPage = () => {
                 <SelectValue placeholder="Filter by freshness" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All Freshness Levels</SelectItem>
+                <SelectItem value="all-freshness">All Freshness Levels</SelectItem>
                 <SelectItem value="hot">Hot (Just cooked)</SelectItem>
                 <SelectItem value="warm">Warm (Few hours old)</SelectItem>
                 <SelectItem value="cold">Cold (Refrigerated/Packaged)</SelectItem>
