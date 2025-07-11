@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -13,65 +13,183 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import DonationCard from '@/components/donations/DonationCard';
-import { mockDonations, FoodDonation, foodCategories, freshnessLevels } from '@/lib/mockData';
-import { Search } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Search, MapPin, Clock, User } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+
+interface FoodCategory {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface Donation {
+  id: string;
+  title: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  freshness: 'hot' | 'warm' | 'cold';
+  expiry_time: string;
+  pickup_address: string;
+  pickup_instructions: string;
+  photo_url: string | null;
+  status: string;
+  created_at: string;
+  food_categories: {
+    name: string;
+  };
+  profiles: {
+    full_name: string;
+    city: string;
+  };
+}
 
 const RequestPage = () => {
-  const { user, isAuthenticated } = useUser();
+  const { profile, isAuthenticated } = useAuth();
   const navigate = useNavigate();
-  const [availableDonations, setAvailableDonations] = useState<FoodDonation[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [categories, setCategories] = useState<FoodCategory[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [selectedFreshness, setSelectedFreshness] = useState<string>('');
-  
-  useEffect(() => {
-    // Filter donations that are available
-    const filteredDonations = mockDonations
-      .filter(donation => donation.status === 'available')
-      .filter(donation => {
-        // Apply search filter if there's a query
-        if (searchQuery && !donation.name.toLowerCase().includes(searchQuery.toLowerCase()) && 
-            !donation.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
-          return false;
-        }
-        
-        // Apply category filter if selected
-        if (selectedCategory && donation.category !== selectedCategory) {
-          return false;
-        }
-        
-        // Apply freshness filter if selected
-        if (selectedFreshness && donation.freshness !== selectedFreshness) {
-          return false;
-        }
-        
-        return true;
-      })
-      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-    
-    setAvailableDonations(filteredDonations);
-  }, [searchQuery, selectedCategory, selectedFreshness]);
 
-  const handleClaimDonation = (donationId: string) => {
+  useEffect(() => {
+    fetchCategories();
+    fetchDonations();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('food_categories')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchDonations = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('donations')
+        .select(`
+          *,
+          food_categories (name),
+          profiles (full_name, city)
+        `)
+        .eq('status', 'available')
+        .gt('expiry_time', new Date().toISOString())
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setDonations(data || []);
+    } catch (error) {
+      console.error('Error fetching donations:', error);
+      toast.error('Failed to load available donations');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredDonations = donations.filter(donation => {
+    // Apply search filter
+    if (searchQuery && !donation.title.toLowerCase().includes(searchQuery.toLowerCase()) && 
+        !donation.description?.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    
+    // Apply category filter
+    if (selectedCategory && donation.food_categories.name !== selectedCategory) {
+      return false;
+    }
+    
+    // Apply freshness filter
+    if (selectedFreshness && donation.freshness !== selectedFreshness) {
+      return false;
+    }
+    
+    return true;
+  });
+
+  const handleClaimDonation = async (donationId: string) => {
     if (!isAuthenticated) {
       toast.error('Please log in to claim donations');
       navigate('/login');
       return;
     }
     
-    if (user?.role !== 'ngo') {
+    if (profile?.user_role !== 'ngo') {
       toast.error('Only NGOs and registered receivers can claim donations');
       return;
     }
+
+    try {
+      // Check if already claimed
+      const { data: existingClaim } = await supabase
+        .from('donation_claims')
+        .select('id')
+        .eq('donation_id', donationId)
+        .eq('claimer_id', profile.id)
+        .single();
+
+      if (existingClaim) {
+        toast.error('You have already claimed this donation');
+        return;
+      }
+
+      // Create claim
+      const { error } = await supabase
+        .from('donation_claims')
+        .insert({
+          donation_id: donationId,
+          claimer_id: profile.id,
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      // Update donation status
+      await supabase
+        .from('donations')
+        .update({ status: 'claimed' })
+        .eq('id', donationId);
+
+      toast.success('Donation claimed successfully!');
+      fetchDonations(); // Refresh the list
+    } catch (error) {
+      console.error('Error claiming donation:', error);
+      toast.error('Failed to claim donation. Please try again.');
+    }
+  };
+
+  const formatTimeAgo = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
     
-    toast.success('Donation claimed successfully!');
-    // In a real app, this would update the database and trigger notifications
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    return `${Math.floor(diffInHours / 24)}d ago`;
+  };
+
+  const formatExpiryTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInHours = Math.floor((date.getTime() - now.getTime()) / (1000 * 60 * 60));
     
-    // Update the local state to reflect the change
-    setAvailableDonations(availableDonations.filter(donation => donation.id !== donationId));
+    if (diffInHours < 1) return 'Expires soon';
+    if (diffInHours < 24) return `Expires in ${diffInHours}h`;
+    return `Expires in ${Math.floor(diffInHours / 24)}d`;
   };
 
   return (
@@ -102,10 +220,10 @@ const RequestPage = () => {
                 <SelectValue placeholder="Filter by category" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all-categories">All Categories</SelectItem>
-                {foodCategories.map(category => (
-                  <SelectItem key={category} value={category}>
-                    {category}
+                <SelectItem value="">All Categories</SelectItem>
+                {categories.map(category => (
+                  <SelectItem key={category.id} value={category.name}>
+                    {category.name}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -116,7 +234,7 @@ const RequestPage = () => {
                 <SelectValue placeholder="Filter by freshness" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all-freshness">All Freshness Levels</SelectItem>
+                <SelectItem value="">All Freshness Levels</SelectItem>
                 <SelectItem value="hot">Hot (Just cooked)</SelectItem>
                 <SelectItem value="warm">Warm (Few hours old)</SelectItem>
                 <SelectItem value="cold">Cold (Refrigerated/Packaged)</SelectItem>
@@ -127,14 +245,91 @@ const RequestPage = () => {
         
         {/* Results section */}
         <div>
-          {availableDonations.length > 0 ? (
+          {loading ? (
+            <div className="text-center py-16">
+              <p className="text-muted-foreground">Loading available donations...</p>
+            </div>
+          ) : filteredDonations.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {availableDonations.map(donation => (
-                <DonationCard 
-                  key={donation.id}
-                  donation={donation}
-                  onClaimDonation={handleClaimDonation}
-                />
+              {filteredDonations.map(donation => (
+                <Card key={donation.id} className="overflow-hidden">
+                  {donation.photo_url && (
+                    <div className="aspect-video bg-muted">
+                      <img 
+                        src={donation.photo_url} 
+                        alt={donation.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                  <CardHeader className="pb-3">
+                    <div className="flex items-start justify-between">
+                      <CardTitle className="text-lg">{donation.title}</CardTitle>
+                      <Badge variant="secondary" className="ml-2">
+                        {donation.food_categories.name}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <User size={14} />
+                        {donation.profiles.full_name}
+                      </div>
+                      {donation.profiles.city && (
+                        <div className="flex items-center gap-1">
+                          <MapPin size={14} />
+                          {donation.profiles.city}
+                        </div>
+                      )}
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    {donation.description && (
+                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                        {donation.description}
+                      </p>
+                    )}
+                    
+                    <div className="space-y-2 mb-4">
+                      <div className="flex justify-between text-sm">
+                        <span>Quantity:</span>
+                        <span className="font-medium">{donation.quantity} {donation.unit}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Freshness:</span>
+                        <Badge variant="outline" className="capitalize">
+                          {donation.freshness}
+                        </Badge>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Pickup:</span>
+                        <span className="font-medium truncate ml-2">{donation.pickup_address}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-4">
+                      <div className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {formatTimeAgo(donation.created_at)}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {formatExpiryTime(donation.expiry_time)}
+                      </div>
+                    </div>
+                    
+                    <Button 
+                      className="w-full" 
+                      onClick={() => handleClaimDonation(donation.id)}
+                      disabled={!isAuthenticated || profile?.user_role !== 'ngo'}
+                    >
+                      {!isAuthenticated ? 'Login to Claim' : 
+                       profile?.user_role !== 'ngo' ? 'NGOs Only' : 'Claim Donation'}
+                    </Button>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           ) : (
@@ -170,7 +365,7 @@ const RequestPage = () => {
               If you or your organization needs food assistance, register as a receiver to claim available donations.
             </p>
             {isAuthenticated ? (
-              user?.role === 'ngo' ? (
+              profile?.user_role === 'ngo' ? (
                 <p className="text-sm text-muted-foreground">
                   You're registered as a food receiver. You can claim donations above.
                 </p>

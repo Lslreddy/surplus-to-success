@@ -1,6 +1,7 @@
+
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -32,7 +33,7 @@ interface RegisterFormData {
 }
 
 const RegisterPage = () => {
-  const { register: registerUser } = useUser();
+  const { signUp, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   
@@ -40,19 +41,42 @@ const RegisterPage = () => {
   
   const password = watch('password');
 
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    navigate('/dashboard');
+    return null;
+  }
+
   const onSubmit = async (data: RegisterFormData) => {
     if (data.password !== data.confirmPassword) {
       toast.error("Passwords don't match!");
       return;
     }
     
+    if (!data.role) {
+      toast.error("Please select a role!");
+      return;
+    }
+    
     setIsLoading(true);
     try {
-      await registerUser(data.name, data.email, data.password, data.role);
-      toast.success('Registration successful!');
-      navigate('/dashboard');
+      const { error } = await signUp(data.email, data.password, data.name, data.role);
+      
+      if (error) {
+        if (error.message.includes('User already registered')) {
+          toast.error('An account with this email already exists. Please sign in instead.');
+        } else if (error.message.includes('Password should be at least 6 characters')) {
+          toast.error('Password should be at least 6 characters long.');
+        } else {
+          toast.error(error.message || 'Registration failed. Please try again.');
+        }
+        console.error('Registration error:', error);
+      } else {
+        toast.success('Registration successful! Please check your email to confirm your account.');
+        navigate('/login');
+      }
     } catch (error) {
-      toast.error('Registration failed. Please try again.');
+      toast.error('An unexpected error occurred. Please try again.');
       console.error('Registration error:', error);
     } finally {
       setIsLoading(false);
@@ -135,7 +159,7 @@ const RegisterPage = () => {
                     type="password" 
                     {...register('password', { 
                       required: 'Password is required',
-                      minLength: { value: 8, message: 'Password must be at least 8 characters' }
+                      minLength: { value: 6, message: 'Password must be at least 6 characters' }
                     })}
                   />
                   {errors.password && (

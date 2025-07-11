@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,20 +23,38 @@ interface LoginFormData {
 }
 
 const LoginPage = () => {
-  const { login } = useUser();
+  const { signIn, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   
   const { register, handleSubmit, formState: { errors } } = useForm<LoginFormData>();
 
+  // Redirect if already authenticated
+  if (isAuthenticated) {
+    navigate('/dashboard');
+    return null;
+  }
+
   const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
     try {
-      await login(data.email, data.password);
-      toast.success('Login successful!');
-      navigate('/dashboard');
+      const { error } = await signIn(data.email, data.password);
+      
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          toast.error('Invalid email or password. Please check your credentials.');
+        } else if (error.message.includes('Email not confirmed')) {
+          toast.error('Please confirm your email address before signing in.');
+        } else {
+          toast.error(error.message || 'Login failed. Please try again.');
+        }
+        console.error('Login error:', error);
+      } else {
+        toast.success('Login successful!');
+        navigate('/dashboard');
+      }
     } catch (error) {
-      toast.error('Login failed. Please check your credentials.');
+      toast.error('An unexpected error occurred. Please try again.');
       console.error('Login error:', error);
     } finally {
       setIsLoading(false);
@@ -104,11 +122,6 @@ const LoginPage = () => {
                   Sign up
                 </Link>
               </p>
-              <div className="mt-6">
-                <p className="text-xs text-muted-foreground mb-2">Tip: For demo purposes, you can use:</p>
-                <p className="text-xs text-muted-foreground">Email: donor@example.com, ngo@example.com, or volunteer@example.com</p>
-                <p className="text-xs text-muted-foreground">Password: any password will work</p>
-              </div>
             </div>
           </Card>
         </div>
