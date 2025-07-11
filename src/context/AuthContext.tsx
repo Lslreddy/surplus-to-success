@@ -12,6 +12,8 @@ interface UserProfile {
   phone_number?: string;
   user_role: UserRole;
   profile_photo?: string;
+  avatar_url?: string;
+  provider?: string;
   city?: string;
   state?: string;
   created_at: string;
@@ -26,6 +28,7 @@ interface AuthContextType {
   isLoading: boolean;
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<{ error: any }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
 }
@@ -42,11 +45,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth state change:', event, session?.user?.email);
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Fetch user profile
+          // Defer profile fetching to avoid potential deadlocks
           setTimeout(async () => {
             await fetchUserProfile(session.user.id);
           }, 0);
@@ -60,6 +64,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Check for existing session
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('Initial session check:', session?.user?.email);
       setSession(session);
       setUser(session?.user ?? null);
       
@@ -107,13 +112,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: fullName,
-            user_role: role
+            user_role: role,
+            provider: 'email'
           }
         }
       });
 
+      if (error) {
+        console.error('Sign up error:', error);
+      }
+
       return { error };
     } catch (error) {
+      console.error('Sign up catch error:', error);
       return { error };
     }
   };
@@ -125,8 +136,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password
       });
 
+      if (error) {
+        console.error('Sign in error:', error);
+      }
+
       return { error };
     } catch (error) {
+      console.error('Sign in catch error:', error);
+      return { error };
+    }
+  };
+
+  const signInWithGoogle = async () => {
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+        }
+      });
+
+      if (error) {
+        console.error('Google sign in error:', error);
+      }
+
+      return { error };
+    } catch (error) {
+      console.error('Google sign in catch error:', error);
       return { error };
     }
   };
@@ -179,6 +219,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     signUp,
     signIn,
+    signInWithGoogle,
     signOut,
     updateProfile
   };

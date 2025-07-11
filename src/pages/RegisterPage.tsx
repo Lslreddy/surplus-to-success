@@ -20,9 +20,11 @@ import {
   CardHeader, 
   CardTitle 
 } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useForm, Controller } from 'react-hook-form';
 import MainLayout from '@/components/layout/MainLayout';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 
 interface RegisterFormData {
   name: string;
@@ -94,8 +96,21 @@ const RegisterPage = () => {
                 Join PlateShare and start making a difference
               </CardDescription>
             </CardHeader>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <CardContent className="space-y-4">
+            <CardContent className="space-y-4">
+              <GoogleSignInButton text="Sign up with Google" />
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator className="w-full" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with email
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
                   <Input 
@@ -181,21 +196,20 @@ const RegisterPage = () => {
                     <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
                   )}
                 </div>
-              </CardContent>
-              <CardFooter className="flex flex-col">
+
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Creating account...' : 'Create account'}
                 </Button>
-              </CardFooter>
-            </form>
-            <div className="px-8 pb-8 pt-2 text-center">
-              <p className="text-sm text-muted-foreground">
+              </form>
+            </CardContent>
+            <CardFooter className="text-center">
+              <p className="text-sm text-muted-foreground w-full">
                 Already have an account?{' '}
                 <Link to="/login" className="text-primary hover:underline">
                   Sign in
                 </Link>
               </p>
-            </div>
+            </CardFooter>
           </Card>
         </div>
       </div>

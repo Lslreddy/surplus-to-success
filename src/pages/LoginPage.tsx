@@ -13,9 +13,11 @@ import {
   CardHeader, 
   CardTitle 
 } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import MainLayout from '@/components/layout/MainLayout';
+import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
 
 interface LoginFormData {
   email: string;
@@ -44,7 +46,9 @@ const LoginPage = () => {
         if (error.message.includes('Invalid login credentials')) {
           toast.error('Invalid email or password. Please check your credentials.');
         } else if (error.message.includes('Email not confirmed')) {
-          toast.error('Please confirm your email address before signing in.');
+          toast.error('Please check your email and click the confirmation link to activate your account.');
+        } else if (error.message.includes('email_not_confirmed')) {
+          toast.error('Please check your email and click the confirmation link to activate your account.');
         } else {
           toast.error(error.message || 'Login failed. Please try again.');
         }
@@ -72,8 +76,21 @@ const LoginPage = () => {
                 Enter your email and password to access your account
               </CardDescription>
             </CardHeader>
-            <form onSubmit={handleSubmit(onSubmit)}>
-              <CardContent className="space-y-4">
+            <CardContent className="space-y-4">
+              <GoogleSignInButton text="Sign in with Google" />
+              
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <Separator className="w-full" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">
+                    Or continue with email
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input 
@@ -108,21 +125,19 @@ const LoginPage = () => {
                     <p className="text-sm text-destructive">{errors.password.message}</p>
                   )}
                 </div>
-              </CardContent>
-              <CardFooter className="flex flex-col">
                 <Button type="submit" className="w-full" disabled={isLoading}>
                   {isLoading ? 'Signing in...' : 'Sign in'}
                 </Button>
-              </CardFooter>
-            </form>
-            <div className="px-8 pb-8 text-center">
-              <p className="text-sm text-muted-foreground">
+              </form>
+            </CardContent>
+            <CardFooter className="text-center">
+              <p className="text-sm text-muted-foreground w-full">
                 Don't have an account?{' '}
                 <Link to="/register" className="text-primary hover:underline">
                   Sign up
                 </Link>
               </p>
-            </div>
+            </CardFooter>
           </Card>
         </div>
       </div>
