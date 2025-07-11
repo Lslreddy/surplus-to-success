@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
@@ -50,10 +49,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Defer profile fetching to avoid potential deadlocks
+          // For Google OAuth users, the profile might be created automatically
+          // Wait a bit for the trigger to complete
           setTimeout(async () => {
             await fetchUserProfile(session.user.id);
-          }, 0);
+          }, 1000);
         } else {
           setProfile(null);
         }
@@ -91,7 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Type cast the user_role to ensure it matches our UserRole type
       const profileData: UserProfile = {
         ...data,
         user_role: data.user_role as UserRole
@@ -109,7 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
+          emailRedirectTo: `${window.location.origin}/dashboard`,
           data: {
             full_name: fullName,
             user_role: role,
@@ -120,6 +119,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Sign up error:', error);
+      } else if (data.user && !data.user.email_confirmed_at) {
+        toast.success('Please check your email and click the confirmation link to complete registration.');
       }
 
       return { error };
@@ -138,6 +139,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Sign in error:', error);
+      } else {
+        toast.success('Successfully signed in!');
       }
 
       return { error };
@@ -152,7 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/`,
+          redirectTo: `${window.location.origin}/dashboard`,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
@@ -162,6 +165,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) {
         console.error('Google sign in error:', error);
+        if (error.message.includes('provider is not enabled')) {
+          toast.error('Google sign-in is not enabled. Please contact support.');
+        }
       }
 
       return { error };
@@ -177,8 +183,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser(null);
       setSession(null);
       setProfile(null);
+      toast.success('Successfully signed out!');
     } catch (error) {
       console.error('Error signing out:', error);
+      toast.error('Error signing out. Please try again.');
     }
   };
 

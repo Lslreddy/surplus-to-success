@@ -45,16 +45,15 @@ const LoginPage = () => {
       if (error) {
         if (error.message.includes('Invalid login credentials')) {
           toast.error('Invalid email or password. Please check your credentials.');
-        } else if (error.message.includes('Email not confirmed')) {
+        } else if (error.message.includes('Email not confirmed') || error.message.includes('email_not_confirmed')) {
           toast.error('Please check your email and click the confirmation link to activate your account.');
-        } else if (error.message.includes('email_not_confirmed')) {
-          toast.error('Please check your email and click the confirmation link to activate your account.');
+        } else if (error.message.includes('signup_disabled')) {
+          toast.error('New signups are currently disabled. Please contact support.');
         } else {
           toast.error(error.message || 'Login failed. Please try again.');
         }
         console.error('Login error:', error);
       } else {
-        toast.success('Login successful!');
         navigate('/dashboard');
       }
     } catch (error) {

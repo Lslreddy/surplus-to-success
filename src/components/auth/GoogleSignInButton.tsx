@@ -19,7 +19,11 @@ const GoogleSignInButton = ({ text = 'Continue with Google', variant = 'outline'
       const { error } = await signInWithGoogle();
       
       if (error) {
-        toast.error('Failed to sign in with Google. Please try again.');
+        if (error.message.includes('provider is not enabled')) {
+          toast.error('Google sign-in is not configured properly. Please use email/password instead.');
+        } else {
+          toast.error('Failed to sign in with Google. Please try again.');
+        }
         console.error('Google sign in error:', error);
       }
     } catch (error) {

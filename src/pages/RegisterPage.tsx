@@ -69,12 +69,14 @@ const RegisterPage = () => {
           toast.error('An account with this email already exists. Please sign in instead.');
         } else if (error.message.includes('Password should be at least 6 characters')) {
           toast.error('Password should be at least 6 characters long.');
+        } else if (error.message.includes('signup_disabled')) {
+          toast.error('New signups are currently disabled. Please contact support.');
         } else {
           toast.error(error.message || 'Registration failed. Please try again.');
         }
         console.error('Registration error:', error);
       } else {
-        toast.success('Registration successful! Please check your email to confirm your account.');
+        // Don't navigate immediately - wait for email confirmation
         navigate('/login');
       }
     } catch (error) {
