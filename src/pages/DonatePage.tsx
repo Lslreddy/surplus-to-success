@@ -1,7 +1,9 @@
+
 import React, { useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,41 +24,117 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { foodCategories, freshnessLevels } from '@/lib/mockData';
 import { useForm, Controller } from 'react-hook-form';
 
 interface DonationFormData {
-  name: string;
-  category: string;
+  title: string;
+  food_category_id: string;
   quantity: string;
-  timeCooked?: string;
-  expiryTime: string;
-  freshness: string;
+  unit: string;
+  expiry_time: string;
+  freshness: 'hot' | 'warm' | 'cold';
   description?: string;
-  location: string;
+  pickup_address: string;
+  pickup_instructions?: string;
   photo?: FileList;
 }
 
 const DonatePage = () => {
-  const { user, isAuthenticated } = useUser();
+  const { user, profile, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [foodCategories, setFoodCategories] = useState<any[]>([]);
 
   const { register, handleSubmit, control, watch, formState: { errors } } = useForm<DonationFormData>();
-  const selectedCategory = watch('category');
+
+  // Fetch food categories
+  React.useEffect(() => {
+    const fetchCategories = async () => {
+      const { data, error } = await supabase
+        .from('food_categories')
+        .select('*')
+        .order('name');
+      
+      if (data) {
+        setFoodCategories(data);
+      }
+    };
+    
+    fetchCategories();
+  }, []);
+
+  // Redirect if not authenticated or not a donor
+  React.useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+      return;
+    }
+    
+    if (profile && profile.user_role !== 'donor') {
+      toast.error('Only donors can access this page');
+      navigate('/dashboard');
+    }
+  }, [isAuthenticated, profile, navigate]);
 
   const onSubmit = async (data: DonationFormData) => {
-    // For demo purposes, we'll simulate a form submission
+    if (!user) {
+      toast.error('You must be logged in to donate');
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
-      // In a real app, we'd make an API call to store the donation
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Upload photo if provided
+      let photo_url = null;
+      if (data.photo && data.photo[0]) {
+        const file = data.photo[0];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from('donation-photos')
+          .upload(fileName, file);
+
+        if (uploadError) {
+          console.error('Upload error:', uploadError);
+        } else {
+          const { data: urlData } = supabase.storage
+            .from('donation-photos')
+            .getPublicUrl(fileName);
+          photo_url = urlData.publicUrl;
+        }
+      }
+
+      // Create donation
+      const { error } = await supabase
+        .from('donations')
+        .insert([
+          {
+            donor_id: user.id,
+            title: data.title,
+            description: data.description,
+            food_category_id: data.food_category_id,
+            quantity: parseInt(data.quantity),
+            unit: data.unit,
+            freshness: data.freshness,
+            expiry_time: data.expiry_time,
+            pickup_address: data.pickup_address,
+            pickup_instructions: data.pickup_instructions,
+            photo_url,
+            status: 'available'
+          }
+        ]);
+      
+      if (error) {
+        throw error;
+      }
       
       toast.success('Donation successfully posted!');
       navigate('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error posting donation:', error);
       toast.error('Failed to post donation. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -73,6 +151,10 @@ const DonatePage = () => {
       reader.readAsDataURL(file);
     }
   };
+
+  if (!isAuthenticated) {
+    return null; // Will redirect to login
+  }
 
   return (
     <MainLayout>
@@ -96,22 +178,22 @@ const DonatePage = () => {
               <CardContent className="space-y-6">
                 <div className="grid grid-cols-1 gap-6">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Food Name</Label>
+                    <Label htmlFor="title">Food Name</Label>
                     <Input 
-                      id="name" 
+                      id="title" 
                       placeholder="e.g., Vegetable Curry, Fresh Bread, etc."
-                      {...register('name', { required: 'Food name is required' })}
+                      {...register('title', { required: 'Food name is required' })}
                     />
-                    {errors.name && (
-                      <p className="text-sm text-destructive">{errors.name.message}</p>
+                    {errors.title && (
+                      <p className="text-sm text-destructive">{errors.title.message}</p>
                     )}
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="category">Category</Label>
+                      <Label htmlFor="food_category_id">Category</Label>
                       <Controller
-                        name="category"
+                        name="food_category_id"
                         control={control}
                         defaultValue=""
                         rules={{ required: 'Category is required' }}
@@ -122,16 +204,16 @@ const DonatePage = () => {
                             </SelectTrigger>
                             <SelectContent>
                               {foodCategories.map(category => (
-                                <SelectItem key={category} value={category}>
-                                  {category}
+                                <SelectItem key={category.id} value={category.id}>
+                                  {category.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                         )}
                       />
-                      {errors.category && (
-                        <p className="text-sm text-destructive">{errors.category.message}</p>
+                      {errors.food_category_id && (
+                        <p className="text-sm text-destructive">{errors.food_category_id.message}</p>
                       )}
                     </div>
                     
@@ -139,7 +221,8 @@ const DonatePage = () => {
                       <Label htmlFor="quantity">Quantity</Label>
                       <Input 
                         id="quantity" 
-                        placeholder="e.g., 5 kg, serves 10, 20 loaves"
+                        type="number"
+                        placeholder="e.g., 5"
                         {...register('quantity', { required: 'Quantity is required' })}
                       />
                       {errors.quantity && (
@@ -148,27 +231,17 @@ const DonatePage = () => {
                     </div>
                   </div>
                   
-                  {selectedCategory === 'Prepared Meals' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="timeCooked">Time Cooked</Label>
-                      <Input 
-                        id="timeCooked" 
-                        type="datetime-local"
-                        {...register('timeCooked')}
-                      />
-                    </div>
-                  )}
-                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
-                      <Label htmlFor="expiryTime">Expiry Time</Label>
+                      <Label htmlFor="unit">Unit</Label>
                       <Input 
-                        id="expiryTime" 
-                        type="datetime-local"
-                        {...register('expiryTime', { required: 'Expiry time is required' })}
+                        id="unit" 
+                        placeholder="e.g., kg, portions, loaves"
+                        defaultValue="portions"
+                        {...register('unit', { required: 'Unit is required' })}
                       />
-                      {errors.expiryTime && (
-                        <p className="text-sm text-destructive">{errors.expiryTime.message}</p>
+                      {errors.unit && (
+                        <p className="text-sm text-destructive">{errors.unit.message}</p>
                       )}
                     </div>
                     
@@ -177,7 +250,7 @@ const DonatePage = () => {
                       <Controller
                         name="freshness"
                         control={control}
-                        defaultValue=""
+                        defaultValue="cold"
                         rules={{ required: 'Freshness is required' }}
                         render={({ field }) => (
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
@@ -199,6 +272,18 @@ const DonatePage = () => {
                   </div>
                   
                   <div className="space-y-2">
+                    <Label htmlFor="expiry_time">Expiry Time</Label>
+                    <Input 
+                      id="expiry_time" 
+                      type="datetime-local"
+                      {...register('expiry_time', { required: 'Expiry time is required' })}
+                    />
+                    {errors.expiry_time && (
+                      <p className="text-sm text-destructive">{errors.expiry_time.message}</p>
+                    )}
+                  </div>
+                  
+                  <div className="space-y-2">
                     <Label htmlFor="description">Description (Optional)</Label>
                     <Textarea 
                       id="description" 
@@ -209,15 +294,25 @@ const DonatePage = () => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="location">Pickup Location</Label>
+                    <Label htmlFor="pickup_address">Pickup Address</Label>
                     <Input 
-                      id="location" 
+                      id="pickup_address" 
                       placeholder="Address for pickup"
-                      {...register('location', { required: 'Pickup location is required' })}
+                      {...register('pickup_address', { required: 'Pickup address is required' })}
                     />
-                    {errors.location && (
-                      <p className="text-sm text-destructive">{errors.location.message}</p>
+                    {errors.pickup_address && (
+                      <p className="text-sm text-destructive">{errors.pickup_address.message}</p>
                     )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="pickup_instructions">Pickup Instructions (Optional)</Label>
+                    <Textarea 
+                      id="pickup_instructions" 
+                      placeholder="Any special instructions for pickup"
+                      rows={2}
+                      {...register('pickup_instructions')}
+                    />
                   </div>
                   
                   <div className="space-y-2">

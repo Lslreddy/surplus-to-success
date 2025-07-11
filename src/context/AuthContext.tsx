@@ -86,7 +86,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      setProfile(data);
+      // Type cast the user_role to ensure it matches our UserRole type
+      const profileData: UserProfile = {
+        ...data,
+        user_role: data.user_role as UserRole
+      };
+
+      setProfile(profileData);
     } catch (error) {
       console.error('Error fetching profile:', error);
     }
@@ -152,7 +158,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (error) return { error };
 
-      setProfile(data);
+      // Type cast the returned data
+      const profileData: UserProfile = {
+        ...data,
+        user_role: data.user_role as UserRole
+      };
+
+      setProfile(profileData);
       return { error: null };
     } catch (error) {
       return { error };
