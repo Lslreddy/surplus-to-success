@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import {
   Card,
   CardContent,
@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { ArrowRight } from 'lucide-react';
 
 const DashboardPage = () => {
-  const { user, isAuthenticated } = useUser();
+  const { user, profile, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [userDonations, setUserDonations] = useState<FoodDonation[]>([]);
   const [userClaims, setUserClaims] = useState<FoodDonation[]>([]);
@@ -36,17 +36,17 @@ const DashboardPage = () => {
     }
 
     // Filter donations based on user role
-    if (user?.role === 'donor') {
+    if (profile?.user_role === 'donor') {
       // For donors, show their own donations
-      setUserDonations(mockDonations.filter(d => d.donorId === user.id || d.donorId === 'donor1'));
-    } else if (user?.role === 'ngo') {
+      setUserDonations(mockDonations.filter(d => d.donorId === user?.id || d.donorId === 'donor1'));
+    } else if (profile?.user_role === 'ngo') {
       // For NGOs, show donations claimed by them
-      setUserClaims(mockDonations.filter(d => d.claimedBy?.id === user.id || d.claimedBy?.id === 'ngo1'));
-    } else if (user?.role === 'volunteer') {
+      setUserClaims(mockDonations.filter(d => d.claimedBy?.id === user?.id || d.claimedBy?.id === 'ngo1'));
+    } else if (profile?.user_role === 'volunteer') {
       // For volunteers, show deliveries assigned to them
-      setUserDeliveries(mockDonations.filter(d => d.volunteerId === user.id || d.volunteerId === 'volunteer1' || d.status === 'claimed'));
+      setUserDeliveries(mockDonations.filter(d => d.volunteerId === user?.id || d.volunteerId === 'volunteer1' || d.status === 'claimed'));
     }
-  }, [user, isAuthenticated, navigate]);
+  }, [user, profile, isAuthenticated, navigate]);
 
   const recentDonations = mockDonations
     .filter(d => d.status === 'available')
@@ -70,20 +70,20 @@ const DashboardPage = () => {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground">
-              Welcome back, {user?.name}! {user?.role === 'donor' ? 'Share your surplus food.' : user?.role === 'ngo' ? 'Find available donations.' : 'Help deliver food to those in need.'}
+              Welcome back, {profile?.full_name}! {profile?.user_role === 'donor' ? 'Share your surplus food.' : profile?.user_role === 'ngo' ? 'Find available donations.' : 'Help deliver food to those in need.'}
             </p>
           </div>
-          {user?.role === 'donor' && (
+          {profile?.user_role === 'donor' && (
             <Button onClick={() => navigate('/donate')}>
               Donate Food
             </Button>
           )}
-          {user?.role === 'ngo' && (
+          {profile?.user_role === 'ngo' && (
             <Button onClick={() => navigate('/request')}>
               Browse Donations
             </Button>
           )}
-          {user?.role === 'volunteer' && (
+          {profile?.user_role === 'volunteer' && (
             <Button onClick={() => navigate('/volunteer')}>
               Find Deliveries
             </Button>
@@ -94,7 +94,7 @@ const DashboardPage = () => {
           {/* Left column */}
           <div className="md:col-span-2 space-y-6">
             {/* Role-specific content */}
-            {user?.role === 'donor' && (
+            {profile?.user_role === 'donor' && (
               <>
                 <Card>
                   <CardHeader>
@@ -168,7 +168,7 @@ const DashboardPage = () => {
               </>
             )}
 
-            {user?.role === 'ngo' && (
+            {profile?.user_role === 'ngo' && (
               <>
                 <Card>
                   <CardHeader>
@@ -223,7 +223,7 @@ const DashboardPage = () => {
               </>
             )}
 
-            {user?.role === 'volunteer' && (
+            {profile?.user_role === 'volunteer' && (
               <>
                 <Card>
                   <CardHeader>
@@ -261,7 +261,7 @@ const DashboardPage = () => {
                     {userDeliveries.length > 0 ? (
                       <div className="space-y-4">
                         {userDeliveries
-                          .filter(d => d.volunteerId === user.id || d.volunteerId === 'volunteer1')
+                          .filter(d => d.volunteerId === user?.id || d.volunteerId === 'volunteer1')
                           .map(delivery => (
                             <DonationCard 
                               key={delivery.id}
