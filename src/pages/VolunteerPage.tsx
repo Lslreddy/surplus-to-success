@@ -1,7 +1,7 @@
 
 import { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ import { mockDonations, FoodDonation } from '@/lib/mockData';
 import { ArrowRight, MapPin } from 'lucide-react';
 
 const VolunteerPage = () => {
-  const { user, isAuthenticated } = useUser();
+  const { user, profile, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   
   const [claimedDonations, setClaimedDonations] = useState<FoodDonation[]>([]);

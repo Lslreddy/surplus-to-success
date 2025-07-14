@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 
 interface DonationCardProps {
   donation: FoodDonation;
@@ -21,7 +21,7 @@ const DonationCard: React.FC<DonationCardProps> = ({
   onVolunteerForDelivery
 }) => {
   const navigate = useNavigate();
-  const { user, isAuthenticated } = useUser();
+  const { user, profile, isAuthenticated } = useAuth();
 
   const handleClaimDonation = () => {
     if (!isAuthenticated) {
@@ -30,7 +30,7 @@ const DonationCard: React.FC<DonationCardProps> = ({
       return;
     }
     
-    if (user?.role !== 'ngo') {
+    if (profile?.user_role !== 'ngo') {
       toast.error('Only NGOs and registered receivers can claim donations');
       return;
     }
@@ -47,7 +47,7 @@ const DonationCard: React.FC<DonationCardProps> = ({
       return;
     }
     
-    if (user?.role !== 'volunteer') {
+    if (profile?.user_role !== 'volunteer') {
       toast.error('Only registered volunteers can pick up donations');
       return;
     }
@@ -116,12 +116,12 @@ const DonationCard: React.FC<DonationCardProps> = ({
             Posted {formatTimeAgo(donation.createdAt)}
           </div>
           <div className="flex space-x-2">
-            {donation.status === 'available' && user?.role === 'ngo' && (
+            {donation.status === 'available' && profile?.user_role === 'ngo' && (
               <Button size="sm" onClick={handleClaimDonation}>
                 Claim
               </Button>
             )}
-            {donation.status === 'claimed' && user?.role === 'volunteer' && !donation.volunteerId && (
+            {donation.status === 'claimed' && profile?.user_role === 'volunteer' && !donation.volunteerId && (
               <Button size="sm" variant="outline" onClick={handleVolunteerForDelivery}>
                 Deliver
               </Button>

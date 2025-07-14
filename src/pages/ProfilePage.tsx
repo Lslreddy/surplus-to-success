@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
-import { useUser } from '@/context/UserContext';
+import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -33,27 +33,27 @@ import { mockDonations } from '@/lib/mockData';
 import DonationCard from '@/components/donations/DonationCard';
 
 const ProfilePage = () => {
-  const { user, isAuthenticated, logout } = useUser();
+  const { user, profile, isAuthenticated, signOut } = useAuth();
   const navigate = useNavigate();
   
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   
   // Form states
-  const [name, setName] = useState(user?.name || '');
+  const [name, setName] = useState(profile?.full_name || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(profile?.phone_number || '');
   const [address, setAddress] = useState('');
   const [bio, setBio] = useState('');
 
   // Filter donations based on user role
   const userDonations = mockDonations.filter(d => {
-    if (user?.role === 'donor') {
-      return d.donorId === user.id || d.donorId === 'donor1';
-    } else if (user?.role === 'ngo') {
-      return d.claimedBy?.id === user.id || d.claimedBy?.id === 'ngo1';
-    } else if (user?.role === 'volunteer') {
-      return d.volunteerId === user.id || d.volunteerId === 'volunteer1';
+    if (profile?.user_role === 'donor') {
+      return d.donorId === user?.id || d.donorId === 'donor1';
+    } else if (profile?.user_role === 'ngo') {
+      return d.claimedBy?.id === user?.id || d.claimedBy?.id === 'ngo1';
+    } else if (profile?.user_role === 'volunteer') {
+      return d.volunteerId === user?.id || d.volunteerId === 'volunteer1';
     }
     return false;
   });
@@ -155,7 +155,7 @@ const ProfilePage = () => {
                     
                     <div className="space-y-2">
                       <Label htmlFor="role">User Type</Label>
-                      <Select defaultValue={user?.role || ''} disabled>
+                      <Select defaultValue={profile?.user_role || ''} disabled>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -175,7 +175,7 @@ const ProfilePage = () => {
                     <div className="space-y-4">
                       <div>
                         <p className="text-sm text-muted-foreground">Name</p>
-                        <p className="font-medium">{user?.name}</p>
+                        <p className="font-medium">{profile?.full_name}</p>
                       </div>
                       
                       <div>
@@ -185,7 +185,7 @@ const ProfilePage = () => {
                       
                       <div>
                         <p className="text-sm text-muted-foreground">User Type</p>
-                        <p className="font-medium capitalize">{user?.role}</p>
+                        <p className="font-medium capitalize">{profile?.user_role}</p>
                       </div>
                       
                       <div>
@@ -195,13 +195,13 @@ const ProfilePage = () => {
                       
                       <div className="bg-primary/10 rounded-lg p-4">
                         <div className="text-sm font-medium">Your Impact</div>
-                        {user?.role === 'donor' && (
+                        {profile?.user_role === 'donor' && (
                           <p className="text-2xl font-bold text-primary">12 donations</p>
                         )}
-                        {user?.role === 'ngo' && (
+                        {profile?.user_role === 'ngo' && (
                           <p className="text-2xl font-bold text-primary">28 meals received</p>
                         )}
-                        {user?.role === 'volunteer' && (
+                        {profile?.user_role === 'volunteer' && (
                           <p className="text-2xl font-bold text-primary">8 deliveries</p>
                         )}
                       </div>
@@ -270,7 +270,7 @@ const ProfilePage = () => {
                   variant="destructive" 
                   className="w-full justify-start"
                   onClick={() => {
-                    logout();
+                    signOut();
                     navigate('/');
                   }}
                 >
@@ -286,8 +286,8 @@ const ProfilePage = () => {
               <CardHeader>
                 <CardTitle>Your Activity</CardTitle>
                 <CardDescription>
-                  {user?.role === 'donor' ? 'Food you\'ve donated' : 
-                   user?.role === 'ngo' ? 'Food you\'ve received' : 
+                  {profile?.user_role === 'donor' ? 'Food you\'ve donated' : 
+                   profile?.user_role === 'ngo' ? 'Food you\'ve received' : 
                    'Deliveries you\'ve made'}
                 </CardDescription>
               </CardHeader>
@@ -364,17 +364,17 @@ const ProfilePage = () => {
                     variant="outline" 
                     className="w-full"
                     onClick={() => {
-                      if (user?.role === 'donor') {
+                      if (profile?.user_role === 'donor') {
                         navigate('/donate');
-                      } else if (user?.role === 'ngo') {
+                      } else if (profile?.user_role === 'ngo') {
                         navigate('/request');
                       } else {
                         navigate('/volunteer');
                       }
                     }}
                   >
-                    {user?.role === 'donor' ? 'Donate More Food' : 
-                     user?.role === 'ngo' ? 'Browse Available Food' : 
+                    {profile?.user_role === 'donor' ? 'Donate More Food' : 
+                     profile?.user_role === 'ngo' ? 'Browse Available Food' : 
                      'Find More Deliveries'}
                   </Button>
                 </div>
@@ -400,8 +400,8 @@ const ProfilePage = () => {
                     <div>
                       <div className="font-medium">First Timer</div>
                       <div className="text-sm text-muted-foreground">
-                        {user?.role === 'donor' ? 'Made your first donation' : 
-                        user?.role === 'ngo' ? 'Received your first donation' : 
+                        {profile?.user_role === 'donor' ? 'Made your first donation' : 
+                        profile?.user_role === 'ngo' ? 'Received your first donation' : 
                         'Completed your first delivery'}
                       </div>
                     </div>
@@ -416,8 +416,8 @@ const ProfilePage = () => {
                     <div>
                       <div className="font-medium">Hunger Hero</div>
                       <div className="text-sm text-muted-foreground">
-                        {user?.role === 'donor' ? 'Made 5+ donations' : 
-                        user?.role === 'ngo' ? 'Received 10+ donations' : 
+                        {profile?.user_role === 'donor' ? 'Made 5+ donations' : 
+                        profile?.user_role === 'ngo' ? 'Received 10+ donations' : 
                         'Completed 5+ deliveries'}
                       </div>
                     </div>
@@ -433,8 +433,8 @@ const ProfilePage = () => {
                     <div>
                       <div className="font-medium">Community Champion</div>
                       <div className="text-sm text-muted-foreground">
-                        {user?.role === 'donor' ? '50+ meals donated' : 
-                        user?.role === 'ngo' ? 'Fed 100+ people' : 
+                        {profile?.user_role === 'donor' ? '50+ meals donated' : 
+                        profile?.user_role === 'ngo' ? 'Fed 100+ people' : 
                         'Delivered to 10+ locations'}
                       </div>
                     </div>
@@ -450,7 +450,7 @@ const ProfilePage = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {user?.role === 'donor' && (
+                  {profile?.user_role === 'donor' && (
                     <>
                       <div>
                         <div className="flex justify-between mb-1">
@@ -484,7 +484,7 @@ const ProfilePage = () => {
                     </>
                   )}
                   
-                  {user?.role === 'ngo' && (
+                  {profile?.user_role === 'ngo' && (
                     <>
                       <div>
                         <div className="flex justify-between mb-1">
@@ -518,7 +518,7 @@ const ProfilePage = () => {
                     </>
                   )}
                   
-                  {user?.role === 'volunteer' && (
+                  {profile?.user_role === 'volunteer' && (
                     <>
                       <div>
                         <div className="flex justify-between mb-1">
