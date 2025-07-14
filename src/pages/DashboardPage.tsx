@@ -23,11 +23,25 @@ import { toast } from 'sonner';
 import { ArrowRight } from 'lucide-react';
 
 const DashboardPage = () => {
-  const { user, profile, isAuthenticated } = useAuth();
+  const { user, profile, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
   const [userDonations, setUserDonations] = useState<FoodDonation[]>([]);
   const [userClaims, setUserClaims] = useState<FoodDonation[]>([]);
   const [userDeliveries, setUserDeliveries] = useState<FoodDonation[]>([]);
+  
+  // Show loading state while authentication is being checked
+  if (isLoading) {
+    return (
+      <MainLayout>
+        <div className="min-h-screen pt-24 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+      </MainLayout>
+    );
+  }
   
   useEffect(() => {
     if (!isAuthenticated) {
