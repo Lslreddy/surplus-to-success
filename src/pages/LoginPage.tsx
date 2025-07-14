@@ -17,7 +17,7 @@ import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
 import MainLayout from '@/components/layout/MainLayout';
-import GoogleSignInButton from '@/components/auth/GoogleSignInButton';
+
 
 interface LoginFormData {
   email: string;
@@ -76,19 +76,6 @@ const LoginPage = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <GoogleSignInButton text="Sign in with Google" />
-              
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center">
-                  <Separator className="w-full" />
-                </div>
-                <div className="relative flex justify-center text-xs uppercase">
-                  <span className="bg-background px-2 text-muted-foreground">
-                    Or continue with email
-                  </span>
-                </div>
-              </div>
-
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>

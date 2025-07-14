@@ -27,7 +27,7 @@ interface AuthContextType {
   isLoading: boolean;
   signUp: (email: string, password: string, fullName: string, role: UserRole) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signInWithGoogle: () => Promise<{ error: any }>;
+  
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>;
 }
@@ -150,32 +150,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const signInWithGoogle = async () => {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-        }
-      });
-
-      if (error) {
-        console.error('Google sign in error:', error);
-        if (error.message.includes('provider is not enabled')) {
-          toast.error('Google sign-in is not enabled. Please contact support.');
-        }
-      }
-
-      return { error };
-    } catch (error) {
-      console.error('Google sign in catch error:', error);
-      return { error };
-    }
-  };
 
   const signOut = async () => {
     try {
@@ -227,7 +201,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isLoading,
     signUp,
     signIn,
-    signInWithGoogle,
+    
     signOut,
     updateProfile
   };
