@@ -33,9 +33,9 @@ interface Donation {
   food_categories: {
     name: string;
   };
-  profiles: {
+  profiles?: {
     full_name: string;
-  };
+  } | null;
 }
 
 const RequestPage = () => {
@@ -259,7 +259,7 @@ const RequestPage = () => {
                     
                     <div className="flex items-center gap-2 text-sm">
                       <User className="h-4 w-4" />
-                      <span>By {donation.profiles.full_name}</span>
+                      <span>By {donation.profiles?.full_name || 'Anonymous Donor'}</span>
                     </div>
                     
                     <div className="flex items-center gap-2 text-sm">
