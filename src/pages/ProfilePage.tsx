@@ -1,7 +1,8 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import MainLayout from '@/components/layout/MainLayout';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -29,8 +30,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { mockDonations } from '@/lib/mockData';
 import DonationCard from '@/components/donations/DonationCard';
+
+interface ClaimedDonation {
+  id: string;
+  title: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  status: string;
+  created_at: string;
+  food_categories: {
+    name: string;
+  };
+  profiles?: {
+    full_name: string;
+  } | null;
+}
 
 const ProfilePage = () => {
   const { user, profile, isAuthenticated, signOut } = useAuth();
@@ -38,6 +54,8 @@ const ProfilePage = () => {
   
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [claimedDonations, setClaimedDonations] = useState<ClaimedDonation[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Form states
   const [name, setName] = useState(profile?.full_name || '');
@@ -46,17 +64,58 @@ const ProfilePage = () => {
   const [address, setAddress] = useState('');
   const [bio, setBio] = useState('');
 
-  // Filter donations based on user role
-  const userDonations = mockDonations.filter(d => {
-    if (profile?.user_role === 'donor') {
-      return d.donorId === user?.id || d.donorId === 'donor1';
-    } else if (profile?.user_role === 'ngo') {
-      return d.claimedBy?.id === user?.id || d.claimedBy?.id === 'ngo1';
-    } else if (profile?.user_role === 'volunteer') {
-      return d.volunteerId === user?.id || d.volunteerId === 'volunteer1';
-    }
-    return false;
-  });
+  // Fetch user's claimed donations if they're an NGO
+  useEffect(() => {
+    const fetchClaimedDonations = async () => {
+      if (!user || profile?.user_role !== 'ngo') {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('donation_claims')
+          .select(`
+            donations (
+              id,
+              title,
+              description,
+              quantity,
+              unit,
+              status,
+              created_at,
+              food_categories (
+                name
+              ),
+              profiles (
+                full_name
+              )
+            )
+          `)
+          .eq('claimer_id', user.id);
+
+        if (error) {
+          console.error('Error fetching claimed donations:', error);
+          toast.error('Failed to load your claimed donations');
+          return;
+        }
+
+        // Extract donation data from the response
+        const donations = data
+          ?.map(claim => claim.donations)
+          .filter(donation => donation !== null) || [];
+
+        setClaimedDonations(donations);
+      } catch (error) {
+        console.error('Error:', error);
+        toast.error('Failed to load your donations');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClaimedDonations();
+  }, [user, profile]);
 
   const handleSaveProfile = () => {
     setIsSaving(true);
@@ -286,8 +345,8 @@ const ProfilePage = () => {
               <CardHeader>
                 <CardTitle>Your Activity</CardTitle>
                 <CardDescription>
-                  {profile?.user_role === 'donor' ? 'Food you\'ve donated' : 
-                   profile?.user_role === 'ngo' ? 'Food you\'ve received' : 
+                  {profile?.user_role === 'ngo' ? 'Food you\'ve claimed' : 
+                   profile?.user_role === 'donor' ? 'Food you\'ve donated' : 
                    'Deliveries you\'ve made'}
                 </CardDescription>
               </CardHeader>
@@ -300,61 +359,103 @@ const ProfilePage = () => {
                   </TabsList>
                   
                   <TabsContent value="active" className="p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {userDonations
-                        .filter(d => ['available', 'claimed', 'in-transit'].includes(d.status))
-                        .map(donation => (
-                          <DonationCard 
-                            key={donation.id}
-                            donation={donation}
-                            variant="compact"
-                          />
-                        ))}
-                      
-                      {userDonations.filter(d => ['available', 'claimed', 'in-transit'].includes(d.status)).length === 0 && (
-                        <div className="col-span-2 text-center py-8">
-                          <p className="text-muted-foreground">No active items found.</p>
-                        </div>
-                      )}
-                    </div>
+                    {loading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading your donations...</p>
+                      </div>
+                    ) : profile?.user_role === 'ngo' && claimedDonations.length > 0 ? (
+                      <div className="space-y-4">
+                        {claimedDonations
+                          .filter(d => d.status === 'claimed')
+                          .map(donation => (
+                            <div key={donation.id} className="border rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-semibold">{donation.title}</h4>
+                                <span className="text-sm text-muted-foreground capitalize">{donation.status}</span>
+                              </div>
+                              <div className="text-sm text-muted-foreground space-y-1">
+                                <p>Category: {donation.food_categories.name}</p>
+                                <p>Quantity: {donation.quantity} {donation.unit}</p>
+                                <p>From: {donation.profiles?.full_name || 'Anonymous Donor'}</p>
+                                {donation.description && <p>Description: {donation.description}</p>}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">
+                          {profile?.user_role === 'ngo' ? "You haven't claimed any active donations yet." :
+                           "No active items found."}
+                        </p>
+                      </div>
+                    )}
                   </TabsContent>
                   
                   <TabsContent value="completed" className="p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {userDonations
-                        .filter(d => d.status === 'delivered')
-                        .map(donation => (
-                          <DonationCard 
-                            key={donation.id}
-                            donation={donation}
-                            variant="compact"
-                          />
-                        ))}
-                      
-                      {userDonations.filter(d => d.status === 'delivered').length === 0 && (
-                        <div className="col-span-2 text-center py-8">
-                          <p className="text-muted-foreground">No completed items found.</p>
-                        </div>
-                      )}
-                    </div>
+                    {loading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading...</p>
+                      </div>
+                    ) : profile?.user_role === 'ngo' && claimedDonations.length > 0 ? (
+                      <div className="space-y-4">
+                        {claimedDonations
+                          .filter(d => d.status === 'delivered')
+                          .map(donation => (
+                            <div key={donation.id} className="border rounded-lg p-4">
+                              <div className="flex justify-between items-start mb-2">
+                                <h4 className="font-semibold">{donation.title}</h4>
+                                <span className="text-sm text-muted-foreground capitalize">{donation.status}</span>
+                              </div>
+                              <div className="text-sm text-muted-foreground space-y-1">
+                                <p>Category: {donation.food_categories.name}</p>
+                                <p>Quantity: {donation.quantity} {donation.unit}</p>
+                                <p>From: {donation.profiles?.full_name || 'Anonymous Donor'}</p>
+                                {donation.description && <p>Description: {donation.description}</p>}
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">No completed items found.</p>
+                      </div>
+                    )}
                   </TabsContent>
                   
                   <TabsContent value="all" className="p-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {userDonations.map(donation => (
-                        <DonationCard 
-                          key={donation.id}
-                          donation={donation}
-                          variant="compact"
-                        />
-                      ))}
-                      
-                      {userDonations.length === 0 && (
-                        <div className="col-span-2 text-center py-8">
-                          <p className="text-muted-foreground">No activity found.</p>
-                        </div>
-                      )}
-                    </div>
+                    {loading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading...</p>
+                      </div>
+                    ) : profile?.user_role === 'ngo' && claimedDonations.length > 0 ? (
+                      <div className="space-y-4">
+                        {claimedDonations.map(donation => (
+                          <div key={donation.id} className="border rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-semibold">{donation.title}</h4>
+                              <span className="text-sm text-muted-foreground capitalize">{donation.status}</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>Category: {donation.food_categories.name}</p>
+                              <p>Quantity: {donation.quantity} {donation.unit}</p>
+                              <p>From: {donation.profiles?.full_name || 'Anonymous Donor'}</p>
+                              {donation.description && <p>Description: {donation.description}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <p className="text-muted-foreground">
+                          {profile?.user_role === 'ngo' ? "You haven't claimed any donations yet." :
+                           "No activity found."}
+                        </p>
+                      </div>
+                    )}
                   </TabsContent>
                 </Tabs>
               </CardContent>
@@ -364,17 +465,17 @@ const ProfilePage = () => {
                     variant="outline" 
                     className="w-full"
                     onClick={() => {
-                      if (profile?.user_role === 'donor') {
-                        navigate('/donate');
-                      } else if (profile?.user_role === 'ngo') {
+                      if (profile?.user_role === 'ngo') {
                         navigate('/request');
+                      } else if (profile?.user_role === 'donor') {
+                        navigate('/donate');
                       } else {
                         navigate('/volunteer');
                       }
                     }}
                   >
-                    {profile?.user_role === 'donor' ? 'Donate More Food' : 
-                     profile?.user_role === 'ngo' ? 'Browse Available Food' : 
+                    {profile?.user_role === 'ngo' ? 'Browse Available Food' : 
+                     profile?.user_role === 'donor' ? 'Donate More Food' : 
                      'Find More Deliveries'}
                   </Button>
                 </div>
@@ -400,8 +501,8 @@ const ProfilePage = () => {
                     <div>
                       <div className="font-medium">First Timer</div>
                       <div className="text-sm text-muted-foreground">
-                        {profile?.user_role === 'donor' ? 'Made your first donation' : 
-                        profile?.user_role === 'ngo' ? 'Received your first donation' : 
+                        {profile?.user_role === 'ngo' ? 'Claimed your first donation' : 
+                        profile?.user_role === 'donor' ? 'Made your first donation' : 
                         'Completed your first delivery'}
                       </div>
                     </div>
@@ -416,8 +517,8 @@ const ProfilePage = () => {
                     <div>
                       <div className="font-medium">Hunger Hero</div>
                       <div className="text-sm text-muted-foreground">
-                        {profile?.user_role === 'donor' ? 'Made 5+ donations' : 
-                        profile?.user_role === 'ngo' ? 'Received 10+ donations' : 
+                        {profile?.user_role === 'ngo' ? 'Claimed 5+ donations' : 
+                        profile?.user_role === 'donor' ? 'Made 5+ donations' : 
                         'Completed 5+ deliveries'}
                       </div>
                     </div>
@@ -433,8 +534,8 @@ const ProfilePage = () => {
                     <div>
                       <div className="font-medium">Community Champion</div>
                       <div className="text-sm text-muted-foreground">
-                        {profile?.user_role === 'donor' ? '50+ meals donated' : 
-                        profile?.user_role === 'ngo' ? 'Fed 100+ people' : 
+                        {profile?.user_role === 'ngo' ? 'Helped feed 100+ people' : 
+                        profile?.user_role === 'donor' ? '50+ meals donated' : 
                         'Delivered to 10+ locations'}
                       </div>
                     </div>

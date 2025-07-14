@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLayout from '@/components/layout/MainLayout';
 import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Card,
   CardContent,
@@ -18,16 +19,30 @@ import {
 } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import DonationCard from '@/components/donations/DonationCard';
-import { mockDonations, donationPredictions, topDonors, topVolunteers, FoodDonation } from '@/lib/mockData';
-import { toast } from 'sonner';
+import { donationPredictions, topDonors, topVolunteers } from '@/lib/mockData';
 import { ArrowRight } from 'lucide-react';
+
+interface ClaimedDonation {
+  id: string;
+  title: string;
+  description?: string;
+  quantity: number;
+  unit: string;
+  status: string;
+  created_at: string;
+  food_categories: {
+    name: string;
+  };
+  profiles?: {
+    full_name: string;
+  } | null;
+}
 
 const DashboardPage = () => {
   const { user, profile, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
-  const [userDonations, setUserDonations] = useState<FoodDonation[]>([]);
-  const [userClaims, setUserClaims] = useState<FoodDonation[]>([]);
-  const [userDeliveries, setUserDeliveries] = useState<FoodDonation[]>([]);
+  const [claimedDonations, setClaimedDonations] = useState<ClaimedDonation[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Show loading state while authentication is being checked
   if (isLoading) {
@@ -49,32 +64,63 @@ const DashboardPage = () => {
       return;
     }
 
-    // Filter donations based on user role
-    if (profile?.user_role === 'donor') {
-      // For donors, show their own donations
-      setUserDonations(mockDonations.filter(d => d.donorId === user?.id || d.donorId === 'donor1'));
-    } else if (profile?.user_role === 'ngo') {
-      // For NGOs, show donations claimed by them
-      setUserClaims(mockDonations.filter(d => d.claimedBy?.id === user?.id || d.claimedBy?.id === 'ngo1'));
-    } else if (profile?.user_role === 'volunteer') {
-      // For volunteers, show deliveries assigned to them
-      setUserDeliveries(mockDonations.filter(d => d.volunteerId === user?.id || d.volunteerId === 'volunteer1' || d.status === 'claimed'));
-    }
+    // Fetch claimed donations for NGOs
+    const fetchClaimedDonations = async () => {
+      if (profile?.user_role !== 'ngo') {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('donation_claims')
+          .select(`
+            donations (
+              id,
+              title,
+              description,
+              quantity,
+              unit,
+              status,
+              created_at,
+              food_categories (
+                name
+              ),
+              profiles (
+                full_name
+              )
+            )
+          `)
+          .eq('claimer_id', user?.id);
+
+        if (error) {
+          console.error('Error fetching claimed donations:', error);
+          return;
+        }
+
+        const donations = data
+          ?.map(claim => claim.donations)
+          .filter(donation => donation !== null) || [];
+
+        setClaimedDonations(donations);
+      } catch (error) {
+        console.error('Error:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClaimedDonations();
   }, [user, profile, isAuthenticated, navigate]);
 
-  const recentDonations = mockDonations
-    .filter(d => d.status === 'available')
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 3);
+  const recentDonations = []; // This would be fetched from the database in a real app
 
   const handleClaimDonation = (donationId: string) => {
-    toast.success('Donation claimed successfully!');
-    // In a real app, this would update the database
+    // This would be implemented to claim a donation in a real app
   };
 
   const handleVolunteerForDelivery = (donationId: string) => {
-    toast.success('You have volunteered for this delivery!');
-    // In a real app, this would update the database
+    // This would be implemented to volunteer for delivery in a real app
   };
 
   return (
@@ -159,24 +205,12 @@ const DashboardPage = () => {
                     <CardDescription>Track the status of your food donations</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {userDonations.length > 0 ? (
-                      <div className="space-y-4">
-                        {userDonations.map(donation => (
-                          <DonationCard 
-                            key={donation.id}
-                            donation={donation}
-                            variant="compact"
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground mb-4">You haven't made any donations yet.</p>
-                        <Button onClick={() => navigate('/donate')}>
-                          Make your first donation
-                        </Button>
-                      </div>
-                    )}
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">You haven't made any donations yet.</p>
+                      <Button onClick={() => navigate('/donate')}>
+                        Make your first donation
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </>
@@ -208,20 +242,31 @@ const DashboardPage = () => {
                   </CardContent>
                 </Card>
                 
-                <Card>
+              <Card>
                   <CardHeader>
                     <CardTitle>Your Claimed Donations</CardTitle>
-                    <CardDescription>Track donations you've requested</CardDescription>
+                    <CardDescription>Track donations you've claimed</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {userClaims.length > 0 ? (
+                    {loading ? (
+                      <div className="text-center py-8">
+                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                        <p className="text-muted-foreground">Loading...</p>
+                      </div>
+                    ) : claimedDonations.length > 0 ? (
                       <div className="space-y-4">
-                        {userClaims.map(donation => (
-                          <DonationCard 
-                            key={donation.id}
-                            donation={donation}
-                            variant="compact"
-                          />
+                        {claimedDonations.slice(0, 3).map(donation => (
+                          <div key={donation.id} className="border rounded-lg p-4">
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-semibold">{donation.title}</h4>
+                              <span className="text-sm text-muted-foreground capitalize">{donation.status}</span>
+                            </div>
+                            <div className="text-sm text-muted-foreground space-y-1">
+                              <p>Category: {donation.food_categories.name}</p>
+                              <p>Quantity: {donation.quantity} {donation.unit}</p>
+                              <p>From: {donation.profiles?.full_name || 'Anonymous Donor'}</p>
+                            </div>
+                          </div>
                         ))}
                       </div>
                     ) : (
@@ -245,20 +290,8 @@ const DashboardPage = () => {
                     <CardDescription>Donations that need delivery volunteers</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {mockDonations
-                        .filter(d => d.status === 'claimed' && !d.volunteerId)
-                        .slice(0, 4)
-                        .map(donation => (
-                          <DonationCard 
-                            key={donation.id}
-                            donation={donation}
-                            onVolunteerForDelivery={handleVolunteerForDelivery}
-                          />
-                        ))}
-                    </div>
-                    
-                    <div className="mt-4 text-center">
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">No delivery opportunities available at the moment.</p>
                       <Button variant="outline" onClick={() => navigate('/volunteer')}>
                         View all delivery opportunities
                       </Button>
@@ -272,26 +305,12 @@ const DashboardPage = () => {
                     <CardDescription>Track your volunteer deliveries</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {userDeliveries.length > 0 ? (
-                      <div className="space-y-4">
-                        {userDeliveries
-                          .filter(d => d.volunteerId === user?.id || d.volunteerId === 'volunteer1')
-                          .map(delivery => (
-                            <DonationCard 
-                              key={delivery.id}
-                              donation={delivery}
-                              variant="compact"
-                            />
-                          ))}
-                      </div>
-                    ) : (
-                      <div className="text-center py-8">
-                        <p className="text-muted-foreground mb-4">You haven't signed up for any deliveries yet.</p>
-                        <Button onClick={() => navigate('/volunteer')}>
-                          Find delivery opportunities
-                        </Button>
-                      </div>
-                    )}
+                    <div className="text-center py-8">
+                      <p className="text-muted-foreground mb-4">You haven't signed up for any deliveries yet.</p>
+                      <Button onClick={() => navigate('/volunteer')}>
+                        Find delivery opportunities
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               </>
